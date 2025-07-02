@@ -1,126 +1,146 @@
-# streamlit_app.py
-
-import streamlit as st
-import pandas as pd
-import numpy as np
-import networkx as nx
-import plotly.graph_objects as go
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-# === 1. CARGA DE DATOS ===
+# -------------------------
+# CARGA Y SIMULACIÓN DE DATOS
+# -------------------------
 @st.cache_data
 def cargar_datos():
-    df = pd.read_csv("gastos_portcos.csv")  # columnas: portco, supplier, gasto
-    return df
+    np.random.seed(42)
+    actividades = ["Transporte", "Tecnología", "Papelería", "Servicios Generales", "Limpieza",
+                   "Alimentos", "Mobiliario", "Consultoría", "Publicidad", "Energía",
+                   "Seguridad", "Logística", "Marketing", "Contabilidad", "Legal"]
 
-df = cargar_datos()
-
-# === 2. FILTROS ===
-st.set_page_config(page_title="Dashboard de Compras Estratégicas", layout="wide")
-st.title("💼 Dashboard de Conexiones Estratégicas entre Portcos y Suppliers")
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    min_gasto = st.slider("Filtrar mínimo gasto", 0, int(df['gasto'].max()), 10000)
-with col2:
-    portcos_seleccionados = st.multiselect("Portcos", df["portco"].unique())
-with col3:
-    suppliers_seleccionados = st.multiselect("Suppliers", df["supplier"].unique())
-
-df_filtrado = df[df['gasto'] >= min_gasto]
-if portcos_seleccionados:
-    df_filtrado = df_filtrado[df_filtrado["portco"].isin(portcos_seleccionados)]
-if suppliers_seleccionados:
-    df_filtrado = df_filtrado[df_filtrado["supplier"].isin(suppliers_seleccionados)]
-
-# === 3. KPIs ===
-st.markdown("### 📊 Indicadores Clave")
-kpi1, kpi2, kpi3 = st.columns(3)
-kpi1.metric("Gasto Total", f"${df_filtrado['gasto'].sum():,.0f}")
-kpi2.metric("Suppliers Compartidos", df_filtrado["supplier"].nunique())
-kpi3.metric("Promedio Gasto por Portco", f"${df_filtrado.groupby('portco')['gasto'].sum().mean():,.0f}")
-
-# === 4. MAPA DE CALOR ===
-st.subheader("🔥 Mapa de Calor de Gasto entre Portcos y Suppliers")
-pivot = df_filtrado.pivot_table(index="portco", columns="supplier", values="gasto", aggfunc='sum', fill_value=0)
-
-fig_heatmap, ax = plt.subplots(figsize=(14, 6))
-sns.heatmap(pivot, cmap="YlGnBu", linewidths=.5, ax=ax)
-st.pyplot(fig_heatmap)
-
-# === 5. GRAFO DE CONEXIONES ===
-st.subheader("🧠 Mapa Interactivo de Conexiones Portcos-Suppliers")
-
-G = nx.Graph()
-for _, row in df_filtrado.iterrows():
-    G.add_node(row['portco'], type='portco')
-    G.add_node(row['supplier'], type='supplier')
-    G.add_edge(row['portco'], row['supplier'], weight=row['gasto'])
-
-pos = nx.spring_layout(G, seed=42, k=0.5)
-edge_trace = go.Scatter(
-    x=[], y=[], line=dict(width=0.5, color='#888'), hoverinfo='none', mode='lines')
-for edge in G.edges():
-    x0, y0 = pos[edge[0]]
-    x1, y1 = pos[edge[1]]
-    edge_trace['x'] += [x0, x1, None]
-    edge_trace['y'] += [y0, y1, None]
-
-node_trace = go.Scatter(
-    x=[], y=[], text=[], mode='markers+text', hoverinfo='text',
-    marker=dict(color=[], size=[], line_width=2))
-
-for node in G.nodes():
-    x, y = pos[node]
-    node_trace['x'].append(x)
-    node_trace['y'].append(y)
-    tipo = G.nodes[node]['type']
-    color = 'lightblue' if tipo == 'portco' else 'lightgreen'
-    size = 10 + np.log1p(df_filtrado[df_filtrado['portco'] == node]['gasto'].sum() + 1)
-    node_trace['marker']['color'].append(color)
-    node_trace['marker']['size'].append(size)
-    node_trace['text'].append(str(node))
-
-fig = go.Figure(data=[edge_trace, node_trace])
-fig.update_layout(
-    title=dict(text='Red de Conexiones Portcos-Suppliers', font=dict(size=20)),
-    showlegend=False, hovermode='closest',
-    margin=dict(b=20, l=5, r=5, t=40),
-    plot_bgcolor='white',
-    xaxis=dict(showgrid=False, zeroline=False),
-    yaxis=dict(showgrid=False, zeroline=False))
-st.plotly_chart(fig, use_container_width=True)
-
-# === 6. TOP 10 ACCIONES ESTRATÉGICAS ===
-st.subheader("🎯 Top 10 Acciones Estratégicas (Generadas Automáticamente)")
-
-acciones = []
-proveedores_top = df_filtrado.groupby('supplier')['gasto'].sum().sort_values(ascending=False).head(20)
-for supplier in proveedores_top.index:
-    portcos_usando = df_filtrado[df_filtrado["supplier"] == supplier]["portco"].unique()
-    ahorro_estimado = df_filtrado[df_filtrado["supplier"] == supplier]["gasto"].sum() * 0.1
-    acciones.append({
-        "Acción Recomendable": f"Negociar compra conjunta de {supplier}",
-        "Beneficio Estimado": f"${ahorro_estimado:,.0f} USD (10%)",
-        "Portcos Involucrados": ", ".join(portcos_usando),
-        "Nivel de Impacto": "Alto" if ahorro_estimado > 300000 else "Medio"
+    portcos = [f"Portco {i}" for i in range(1, 101)]
+    suppliers = pd.DataFrame({
+        "supplier": [f"Supplier {i}" for i in range(1, 1001)],
+        "actividad_economica": np.random.choice(actividades, 1000)
     })
 
-df_acciones = pd.DataFrame(acciones).head(10)
-st.dataframe(df_acciones)
+    clientes_simulados = []
+    for _ in range(3000):
+        actividad = np.random.choice(actividades)
+        portco = np.random.choice(portcos)
+        clientes_simulados.append({
+            "actividad_necesaria": actividad,
+            "portco": portco
+        })
 
-# === 7. ESCENARIOS (SIMULACIÓN) ===
-st.subheader("📈 Escenario de Ahorro Potencial")
+    clientes = pd.DataFrame(clientes_simulados)
+    relaciones = pd.merge(clientes, suppliers, left_on="actividad_necesaria", right_on="actividad_economica")
+    relaciones["monto_usd"] = np.random.randint(1000, 50000, size=len(relaciones))
 
-selected_supplier = st.selectbox("Selecciona un Supplier para Simular", proveedores_top.index)
-involucrados = df_filtrado[df_filtrado["supplier"] == selected_supplier]["portco"].unique()
-total_gasto = df_filtrado[df_filtrado["supplier"] == selected_supplier]["gasto"].sum()
-ahorro = total_gasto * 0.1
+    G = nx.Graph()
+    for _, row in relaciones.iterrows():
+        p, s, monto = row["portco"], row["supplier"], row["monto_usd"]
+        G.add_node(p, tipo="portco")
+        G.add_node(s, tipo="supplier", actividad=row["actividad_economica"])
+        if G.has_edge(p, s):
+            G[p][s]["weight"] += monto
+        else:
+            G.add_edge(p, s, weight=monto)
 
-st.markdown(f"""
-**Supplier:** `{selected_supplier}`  
-**Portcos Involucrados:** {', '.join(involucrados)}  
-**Gasto Total:** ${total_gasto:,.0f} USD  
-**Ahorro Potencial (10%):** 🟢 ${ahorro:,.0f} USD
-""")
+    return G, relaciones
+
+
+# -------------------------
+# CARGA DE DATOS
+# -------------------------
+G, relaciones = cargar_datos()
+
+# -------------------------
+# SIDEBAR: FILTROS
+# -------------------------
+st.sidebar.header("🔎 Filtros")
+actividades_opc = st.sidebar.multiselect("Actividad económica", sorted(relaciones["actividad_economica"].unique()))
+portcos_opc = st.sidebar.multiselect("Portcos", sorted(relaciones["portco"].unique()))
+
+relaciones_filtradas = relaciones.copy()
+if actividades_opc:
+    relaciones_filtradas = relaciones_filtradas[relaciones_filtradas["actividad_economica"].isin(actividades_opc)]
+if portcos_opc:
+    relaciones_filtradas = relaciones_filtradas[relaciones_filtradas["portco"].isin(portcos_opc)]
+
+# -------------------------
+# TOP 90% SUPPLIERS POR GASTO
+# -------------------------
+supplier_gasto = relaciones_filtradas.groupby("supplier")["monto_usd"].sum().sort_values(ascending=False).reset_index()
+supplier_gasto["cumsum"] = supplier_gasto["monto_usd"].cumsum()
+total_gasto = supplier_gasto["monto_usd"].sum()
+supplier_gasto["cumsum_pct"] = supplier_gasto["cumsum"] / total_gasto
+top_90_suppliers = supplier_gasto[supplier_gasto["cumsum_pct"] <= 0.9]["supplier"].tolist()
+relaciones_top = relaciones_filtradas[relaciones_filtradas["supplier"].isin(top_90_suppliers)]
+
+# -------------------------
+# MAPA DE CALOR DE GASTOS POR ACTIVIDAD
+# -------------------------
+st.subheader("📊 Monto total por actividad económica")
+actividad_gasto = relaciones_top.groupby("actividad_economica")["monto_usd"].sum().reset_index()
+
+fig_heatmap = px.bar(
+    actividad_gasto.sort_values("monto_usd"),
+    x="monto_usd",
+    y="actividad_economica",
+    orientation="h",
+    labels={"monto_usd": "Gasto Total (USD)", "actividad_economica": "Actividad"},
+    title="Gasto Total por Actividad Económica"
+)
+st.plotly_chart(fig_heatmap, use_container_width=True)
+
+# -------------------------
+# GRAFO DE CONEXIONES
+# -------------------------
+st.subheader("🌐 Red de Conexiones Portcos-Suppliers")
+
+# Crear subgrafo con los nodos filtrados
+nodos_utiles = set(relaciones_top["portco"]) | set(relaciones_top["supplier"])
+subG = G.subgraph(nodos_utiles)
+
+# Posiciones para layout de grafo
+pos = nx.spring_layout(subG, seed=42)
+
+edge_x = []
+edge_y = []
+for edge in subG.edges(data=True):
+    x0, y0 = pos[edge[0]]
+    x1, y1 = pos[edge[1]]
+    edge_x += [x0, x1, None]
+    edge_y += [y0, y1, None]
+
+edge_trace = go.Scatter(
+    x=edge_x, y=edge_y,
+    line=dict(width=0.5, color='#888'),
+    hoverinfo='none',
+    mode='lines')
+
+node_x = []
+node_y = []
+node_text = []
+node_color = []
+
+for node in subG.nodes(data=True):
+    x, y = pos[node[0]]
+    node_x.append(x)
+    node_y.append(y)
+    tipo = node[1].get("tipo", "")
+    color = "skyblue" if tipo == "portco" else "lightgreen"
+    node_color.append(color)
+    node_text.append(node[0])
+
+node_trace = go.Scatter(
+    x=node_x, y=node_y,
+    mode='markers+text',
+    hoverinfo='text',
+    marker=dict(color=node_color, size=10),
+    text=node_text,
+    textposition="top center"
+)
+
+fig_grafo = go.Figure(data=[edge_trace, node_trace],
+                      layout=go.Layout(
+                          title='Red de Conexiones Portcos-Suppliers',
+                          titlefont_size=16,
+                          showlegend=False,
+                          hovermode='closest',
+                          margin=dict(b=20, l=5, r=5, t=40),
+                          xaxis=dict(showgrid=False, zeroline=False),
+                          yaxis=dict(showgrid=False, zeroline=False)))
+
+st.plotly_chart(fig_grafo, use_container_width=True)
