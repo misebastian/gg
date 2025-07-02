@@ -4,10 +4,11 @@ import networkx as nx
 import numpy as np
 import plotly.graph_objects as go
 
-# Cargar los datos del grafo G y relaciones
+# -------------------------
+# Cargar los datos del grafo y relaciones
+# -------------------------
 @st.cache_data
 def cargar_datos():
-    # Simulación (reemplaza con tu dataset real)
     actividades = ["Transporte", "Tecnología", "Papelería", "Servicios Generales", "Limpieza",
                    "Alimentos", "Mobiliario", "Consultoría", "Publicidad", "Energía",
                    "Seguridad", "Logística", "Marketing", "Contabilidad", "Legal"]
@@ -19,7 +20,7 @@ def cargar_datos():
     })
 
     clientes_simulados = []
-    for i in range(3000):
+    for _ in range(3000):
         actividad = np.random.choice(actividades)
         portco = np.random.choice(portcos)
         clientes_simulados.append({
@@ -45,7 +46,9 @@ def cargar_datos():
 
 G, relaciones = cargar_datos()
 
-# Función para graficar un portco
+# -------------------------
+# Función para graficar relaciones de un portco
+# -------------------------
 def graficar_interactivo_plotly(nombre_nodo, top_n=20):
     vecinos = list(G[nombre_nodo].items())
     vecinos_ordenados = sorted(vecinos, key=lambda x: x[1]['weight'], reverse=True)[:top_n]
@@ -117,21 +120,22 @@ def graficar_interactivo_plotly(nombre_nodo, top_n=20):
     )
     return fig
 
-
-# --- Streamlit UI ---
+# -------------------------
+# STREAMLIT INTERFAZ
+# -------------------------
 st.set_page_config(layout="wide")
 st.title("🔗 Análisis de Relaciones entre Portcos y Suppliers")
+
 portcos = [n for n, d in G.nodes(data=True) if d["tipo"] == "portco"]
 seleccionado = st.selectbox("Selecciona un Portco:", sorted(portcos))
 
 fig = graficar_interactivo_plotly(seleccionado)
 st.plotly_chart(fig, use_container_width=True)
 
-# --- Panel de insights ---
+# Panel de insights
 vecinos = list(G[seleccionado].items())
 suppliers_conectados = [(n, v["weight"]) for n, v in vecinos if G.nodes[n]["tipo"] == "supplier"]
 df_suppliers = pd.DataFrame(suppliers_conectados, columns=["supplier", "monto_usd"]).sort_values(by="monto_usd", ascending=False)
-
 actividades = relaciones[relaciones["portco"] == seleccionado]["actividad_necesaria"].value_counts().head(5)
 
 st.markdown("### 📌 Insights para el equipo de Deals")
@@ -146,35 +150,27 @@ with col2:
 st.markdown("**🔝 Ranking de Suppliers por monto compartido:**")
 st.dataframe(df_suppliers.head(10))
 
-
+# -------------------------
+# PRIORIZACIÓN DE SUPPLIERS (TOP 90%)
+# -------------------------
 st.markdown("## 📊 Priorización Inteligente de Suppliers")
 
-# Crear tabla resumen de suppliers
+# Tabla resumen de suppliers
 relacion_supplier = relaciones.groupby("supplier").agg(
     portcos_unicos=("portco", "nunique"),
     monto_total=("monto_usd", "sum"),
     transacciones=("monto_usd", "count")
 ).reset_index()
 
-# Ordenar por monto y calcular % acumulado
 relacion_supplier = relacion_supplier.sort_values(by="monto_total", ascending=False)
 relacion_supplier["monto_acumulado"] = relacion_supplier["monto_total"].cumsum()
 total_gasto = relacion_supplier["monto_total"].sum()
 relacion_supplier["porc_acumulado"] = relacion_supplier["monto_acumulado"] / total_gasto
 
-# Filtrar solo los que representan el 90% del gasto
+# Filtrar los que representan el 90% del gasto
 relacion_supplier_90 = relacion_supplier[relacion_supplier["porc_acumulado"] <= 0.90].copy()
-st.markdown("### 🏆 Top Suppliers por Gasto Total (cubre el 90%)")
 
-top_n_suppliers = st.slider("Selecciona cuántos Suppliers mostrar:", min_value=5, max_value=len(relacion_supplier_90), value=10)
-st.dataframe(
-    relacion_supplier_90[["supplier", "monto_total", "portcos_unicos", "concentracion_%"]].head(top_n_suppliers),
-    use_container_width=True
-)
-
-
-
-# Calcular concentración (% del portco principal por supplier)
+# Calcular concentración
 concentracion = relaciones.groupby(["supplier", "portco"]).agg(
     monto=("monto_usd", "sum")
 ).reset_index()
@@ -182,18 +178,22 @@ max_monto_por_supplier = concentracion.groupby("supplier")["monto"].max().reset_
 relacion_supplier_90 = relacion_supplier_90.merge(max_monto_por_supplier, on="supplier")
 relacion_supplier_90["concentracion_%"] = (relacion_supplier_90["monto"] / relacion_supplier_90["monto_total"] * 100).round(2)
 
-# --- Selección de un supplier para ver posibles portcos para agrupar ---
+# Mostrar tabla
+st.markdown("### 🏆 Top Suppliers por Gasto Total (cubre el 90%)")
+top_n_suppliers = st.slider("Selecciona cuántos Suppliers mostrar:", min_value=5, max_value=len(relacion_supplier_90), value=10)
+st.dataframe(
+    relacion_supplier_90[["supplier", "monto_total", "portcos_unicos", "concentracion_%"]].head(top_n_suppliers),
+    use_container_width=True
+)
+
+# -------------------------
+# ANÁLISIS DE UN SUPPLIER ESPECÍFICO
+# -------------------------
 st.markdown("### 🔍 Analizar un Supplier específico")
 supplier_seleccionado = st.selectbox("Selecciona un Supplier del Top 90%:", relacion_supplier_90.sort_values("monto_total", ascending=False)["supplier"])
 
-# Portcos conectados a este supplier
 portcos_con_supplier = [n for n in G.neighbors(supplier_seleccionado) if G.nodes[n]["tipo"] == "portco"]
-data_agrupacion = []
-
-for portco in portcos_con_supplier:
-    monto = G[portco][supplier_seleccionado]["weight"]
-    data_agrupacion.append({"portco": portco, "monto_usd": monto})
-
+data_agrupacion = [{"portco": portco, "monto_usd": G[portco][supplier_seleccionado]["weight"]} for portco in portcos_con_supplier]
 df_agrupacion = pd.DataFrame(data_agrupacion).sort_values(by="monto_usd", ascending=False)
 total_monto = df_agrupacion["monto_usd"].sum()
 df_agrupacion["participacion_%"] = (df_agrupacion["monto_usd"] / total_monto * 100).round(2)
@@ -201,7 +201,6 @@ df_agrupacion["participacion_%"] = (df_agrupacion["monto_usd"] / total_monto * 1
 st.markdown(f"**Portcos conectados a `{supplier_seleccionado}` ({len(df_agrupacion)} portcos):**")
 st.dataframe(df_agrupacion, use_container_width=True)
 
-# KPI resumen
 col1, col2, col3 = st.columns(3)
 with col1:
     st.metric("Portcos conectados", len(df_agrupacion))
@@ -209,4 +208,3 @@ with col2:
     st.metric("Monto total", f"${total_monto:,.0f}")
 with col3:
     st.metric("Portco más relevante", df_agrupacion.iloc[0]["portco"])
-
