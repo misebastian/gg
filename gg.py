@@ -168,12 +168,15 @@ node_trace = go.Scatter(
 )
 
 fig = go.Figure(data=[edge_trace, node_trace],
-                layout=go.Layout(
-                    title='Red de Conexiones Portcos-Suppliers',
-                    titlefont_size=16,
-                    showlegend=False,
-                    hovermode='closest',
-                    margin=dict(b=20, l=5, r=5, t=40)
-                ))
+    layout=go.Layout(
+        title=dict(text='Red de Conexiones Portcos-Suppliers'),
+        titlefont=dict(size=16),
+        showlegend=False,
+        hovermode='closest',
+        margin=dict(b=20, l=5, r=5, t=40),
+        xaxis=dict(showgrid=False, zeroline=False),
+        yaxis=dict(showgrid=False, zeroline=False)
+    )
+)
 st.plotly_chart(fig, use_container_width=True)
 
