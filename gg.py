@@ -1,11 +1,9 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import networkx as nx
 import plotly.graph_objects as go
-import seaborn as sns
-import matplotlib.pyplot as plt
+import plotly.express as px 
 # -------------------------
 # CARGA Y SIMULACIÓN DE DATOS
 # -------------------------
