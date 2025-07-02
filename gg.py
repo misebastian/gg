@@ -156,25 +156,35 @@ relacion_supplier = relaciones.groupby("supplier").agg(
     transacciones=("monto_usd", "count")
 ).reset_index()
 
-# Calcular concentración (monto mayor / total)
-concentracion = relaciones.groupby(["supplier", "portco"]).agg(
-    monto=("monto_usd", "sum")
-).reset_index()
+# Ordenar por monto y calcular % acumulado
+relacion_supplier = relacion_supplier.sort_values(by="monto_total", ascending=False)
+relacion_supplier["monto_acumulado"] = relacion_supplier["monto_total"].cumsum()
+total_gasto = relacion_supplier["monto_total"].sum()
+relacion_supplier["porc_acumulado"] = relacion_supplier["monto_acumulado"] / total_gasto
 
-max_monto_por_supplier = concentracion.groupby("supplier")["monto"].max().reset_index()
-relacion_supplier = relacion_supplier.merge(max_monto_por_supplier, on="supplier")
-relacion_supplier["concentracion_%"] = (relacion_supplier["monto"] / relacion_supplier["monto_total"] * 100).round(2)
+# Filtrar solo los que representan el 90% del gasto
+relacion_supplier_90 = relacion_supplier[relacion_supplier["porc_acumulado"] <= 0.90].copy()
+st.markdown("### 🏆 Top Suppliers por Gasto Total (cubre el 90%)")
 
-# Mostrar top suppliers
-top_n_suppliers = st.slider("Selecciona cuántos Suppliers mostrar:", 5, 50, 10)
+top_n_suppliers = st.slider("Selecciona cuántos Suppliers mostrar:", min_value=5, max_value=len(relacion_supplier_90), value=10)
 st.dataframe(
-    relacion_supplier.sort_values(by=["portcos_unicos", "monto_total"], ascending=False).head(top_n_suppliers),
+    relacion_supplier_90[["supplier", "monto_total", "portcos_unicos", "concentracion_%"]].head(top_n_suppliers),
     use_container_width=True
 )
 
+
+
+# Calcular concentración (% del portco principal por supplier)
+concentracion = relaciones.groupby(["supplier", "portco"]).agg(
+    monto=("monto_usd", "sum")
+).reset_index()
+max_monto_por_supplier = concentracion.groupby("supplier")["monto"].max().reset_index()
+relacion_supplier_90 = relacion_supplier_90.merge(max_monto_por_supplier, on="supplier")
+relacion_supplier_90["concentracion_%"] = (relacion_supplier_90["monto"] / relacion_supplier_90["monto_total"] * 100).round(2)
+
 # --- Selección de un supplier para ver posibles portcos para agrupar ---
 st.markdown("### 🔍 Analizar un Supplier específico")
-supplier_seleccionado = st.selectbox("Selecciona un Supplier del ranking anterior:", relacion_supplier["supplier"].sort_values())
+supplier_seleccionado = st.selectbox("Selecciona un Supplier del Top 90%:", relacion_supplier_90.sort_values("monto_total", ascending=False)["supplier"])
 
 # Portcos conectados a este supplier
 portcos_con_supplier = [n for n in G.neighbors(supplier_seleccionado) if G.nodes[n]["tipo"] == "portco"]
