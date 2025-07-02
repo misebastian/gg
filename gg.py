@@ -147,35 +147,56 @@ st.markdown("**🔝 Ranking de Suppliers por monto compartido:**")
 st.dataframe(df_suppliers.head(10))
 
 
-st.markdown("### 🤝 Sugerencias de Agrupación con Otros Portcos")
+st.markdown("## 📊 Priorización Inteligente de Suppliers")
 
-sugerencias = []
-for supplier, monto in df_suppliers.head(5).values:
-    # Encuentra otros portcos conectados a este supplier
-    portcos_conectados = [n for n in G.neighbors(supplier) if G.nodes[n]["tipo"] == "portco"]
-    
-    for portco in portcos_conectados:
-        if portco == seleccionado:
-            continue
-        monto_portco = G[portco][supplier]["weight"]
-        sugerencias.append({
-            "supplier": supplier,
-            "portco_sugerido": portco,
-            "monto_portco_sugerido": monto_portco,
-            "monto_portco_seleccionado": monto,
-            "monto_total_con_supplier": sum(G[n][supplier]["weight"] for n in portcos_conectados),
-            "total_portcos_conectados": len(portcos_conectados)
-        })
+# Crear tabla resumen de suppliers
+relacion_supplier = relaciones.groupby("supplier").agg(
+    portcos_unicos=("portco", "nunique"),
+    monto_total=("monto_usd", "sum"),
+    transacciones=("monto_usd", "count")
+).reset_index()
 
-df_sugerencias = pd.DataFrame(sugerencias)
+# Calcular concentración (monto mayor / total)
+concentracion = relaciones.groupby(["supplier", "portco"]).agg(
+    monto=("monto_usd", "sum")
+).reset_index()
 
-if not df_sugerencias.empty:
-    df_sugerencias["participacion_%"] = (df_sugerencias["monto_portco_seleccionado"] / df_sugerencias["monto_total_con_supplier"] * 100).round(2)
-    st.dataframe(df_sugerencias[[
-        "supplier", "portco_sugerido", "monto_portco_sugerido",
-        "monto_portco_seleccionado", "monto_total_con_supplier",
-        "total_portcos_conectados", "participacion_%"
-    ]].sort_values(by="monto_total_con_supplier", ascending=False))
-else:
-    st.info("No hay sugerencias disponibles para este Portco con los suppliers principales.")
+max_monto_por_supplier = concentracion.groupby("supplier")["monto"].max().reset_index()
+relacion_supplier = relacion_supplier.merge(max_monto_por_supplier, on="supplier")
+relacion_supplier["concentracion_%"] = (relacion_supplier["monto"] / relacion_supplier["monto_total"] * 100).round(2)
+
+# Mostrar top suppliers
+top_n_suppliers = st.slider("Selecciona cuántos Suppliers mostrar:", 5, 50, 10)
+st.dataframe(
+    relacion_supplier.sort_values(by=["portcos_unicos", "monto_total"], ascending=False).head(top_n_suppliers),
+    use_container_width=True
+)
+
+# --- Selección de un supplier para ver posibles portcos para agrupar ---
+st.markdown("### 🔍 Analizar un Supplier específico")
+supplier_seleccionado = st.selectbox("Selecciona un Supplier del ranking anterior:", relacion_supplier["supplier"].sort_values())
+
+# Portcos conectados a este supplier
+portcos_con_supplier = [n for n in G.neighbors(supplier_seleccionado) if G.nodes[n]["tipo"] == "portco"]
+data_agrupacion = []
+
+for portco in portcos_con_supplier:
+    monto = G[portco][supplier_seleccionado]["weight"]
+    data_agrupacion.append({"portco": portco, "monto_usd": monto})
+
+df_agrupacion = pd.DataFrame(data_agrupacion).sort_values(by="monto_usd", ascending=False)
+total_monto = df_agrupacion["monto_usd"].sum()
+df_agrupacion["participacion_%"] = (df_agrupacion["monto_usd"] / total_monto * 100).round(2)
+
+st.markdown(f"**Portcos conectados a `{supplier_seleccionado}` ({len(df_agrupacion)} portcos):**")
+st.dataframe(df_agrupacion, use_container_width=True)
+
+# KPI resumen
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Portcos conectados", len(df_agrupacion))
+with col2:
+    st.metric("Monto total", f"${total_monto:,.0f}")
+with col3:
+    st.metric("Portco más relevante", df_agrupacion.iloc[0]["portco"])
 
