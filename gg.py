@@ -100,18 +100,23 @@ def graficar_interactivo_plotly(nombre_nodo, top_n=20):
         )
     )
 
-    fig = go.Figure(data=[edge_trace, node_trace],
-                    layout=go.Layout(
-                        title=f"<b>Top {top_n} conexiones de {nombre_nodo}</b>",
-                        titlefont_size=20,
-                        showlegend=False,
-                        hovermode='closest',
-                        margin=dict(b=20, l=5, r=5, t=40),
-                        plot_bgcolor='lightsteelblue',
-                        xaxis=dict(showgrid=False, zeroline=False),
-                        yaxis=dict(showgrid=False, zeroline=False)
-                    ))
+    fig = go.Figure(
+        data=[edge_trace, node_trace],
+        layout=go.Layout(
+            title=dict(
+                text=f"<b>Top {top_n} conexiones de {nombre_nodo}</b>",
+                font=dict(size=20)
+            ),
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(b=20, l=5, r=5, t=40),
+            plot_bgcolor='lightsteelblue',
+            xaxis=dict(showgrid=False, zeroline=False),
+            yaxis=dict(showgrid=False, zeroline=False)
+        )
+    )
     return fig
+
 
 # --- Streamlit UI ---
 st.set_page_config(layout="wide")
