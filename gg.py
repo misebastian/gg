@@ -117,14 +117,16 @@ st.dataframe(top_acciones, use_container_width=True)
 # Exportar
 def exportar_excel(df):
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="Acciones")
-        writer.save()
-    return output.getvalue()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Acciones Estratégicas')
+        # NO es necesario writer.save()
+    processed_data = output.getvalue()
+    return processed_data
+
 
 st.download_button(
-    label="📥 Descargar Acciones en Excel",
-    data=exportar_excel(top_acciones),
-    file_name="acciones_estrategicas.xlsx",
+    label="📥 Descargar Acciones Estratégicas en Excel",
+    data=exportar_excel(top_acciones),  # tu dataframe aquí
+    file_name="top_10_acciones_estrategicas.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
